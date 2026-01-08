@@ -143,9 +143,10 @@
             display: flex; gap: 12px; margin-top: 24px; 
             border-top: 2px dashed var(--border); 
             padding-top: 18px; 
+            flex-wrap: wrap; /* ボタンが多い場合に折り返し */
         }
         .btn-action {
-            flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+            flex: 1; min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px;
             padding: 14px; border-radius: 12px; text-decoration: none; 
             font-size: 13px; font-weight: bold; transition: all 0.2s;
         }
@@ -154,6 +155,9 @@
         }
         .btn-web { 
             background: var(--accent-bg); color: var(--accent); 
+        }
+        .btn-sns { 
+            background: #fdf2f8; color: #db2777; /* SNS用ピンク */
         }
         .btn-action:active { transform: scale(0.95); }
 
@@ -174,7 +178,7 @@
             scroll-snap-type: x mandatory;
         }
         .coupon-item { 
-            min-width: 180px; max-width: 180px; 
+            min-width: 260px; max-width: 260px; /* サイズ拡大 */
             background: white; border-radius: 10px; 
             box-shadow: 0 4px 10px rgba(255, 107, 107, 0.1);
             border: 1px solid var(--primary-light); overflow: hidden; flex-shrink: 0; 
@@ -182,7 +186,8 @@
             display: flex; flex-direction: column;
         }
         .coupon-thumb { 
-            width: 100%; height: 100px; object-fit: cover; cursor: pointer; display: block;
+            width: 100%; height: 160px; /* サイズ拡大 */
+            object-fit: cover; cursor: pointer; display: block;
         }
         .coupon-btn { 
             display: block; background: var(--primary); color: white; 
@@ -333,7 +338,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // ★★★ あなたのGAS URL 設定済み ★★★
-        const API_URL = "https://script.google.com/macros/s/AKfycby34WDaf68347ec_nljFwgSUbq62V1-bAL7LpYHfbvtzkFaDWsiRGvZPK14KCTE2nifdQ/exec"; 
+        const API_URL = "https://script.google.com/macros/s/AKfycbx2_qMfBIFFeGYsgNq7e5JEMP-5vjiNQhYbYIz7ACnz4xy2UWZDrxZElbFMhXeMr4FMLQ/exec"; 
 
         let map;
         let allData = []; 
@@ -402,7 +407,8 @@
                     (item.name || "") + 
                     (item.description || "") + 
                     (item.category || "") + 
-                    (item.tel || "")
+                    (item.tel || "") +
+                    (item.address || "")
                 ).toLowerCase();
                 const keyMatch = !keyword || targetText.includes(keyword);
                 return catMatch && keyMatch;
@@ -454,13 +460,15 @@
 
         // ★カードのHTML生成
         function createCardHTML(shop, imgUrl) {
-            // 情報パーツ
+            // 情報パーツ (住所・電話・時間・URL・SNS)
+            const addressHtml = shop.address ? 
+                `<div class="info-row"><div class="info-icon"><i class="fa-solid fa-location-dot"></i></div><div class="info-content">${shop.address}</div></div>` : '';
             const telHtml = shop.tel ? 
                 `<div class="info-row"><div class="info-icon"><i class="fa-solid fa-phone"></i></div><div class="info-content"><a href="tel:${shop.tel}" class="info-link">${shop.tel}</a></div></div>` : '';
             const hoursHtml = shop.hours ? 
                 `<div class="info-row"><div class="info-icon"><i class="fa-regular fa-clock"></i></div><div class="info-content">${shop.hours}</div></div>` : '';
             const urlHtml = shop.url ? 
-                `<div class="info-row"><div class="info-icon"><i class="fa-solid fa-globe"></i></div><div class="info-content"><a href="${shop.url}" target="_blank" class="info-link">公式サイト・SNS</a></div></div>` : '';
+                `<div class="info-row"><div class="info-icon"><i class="fa-solid fa-globe"></i></div><div class="info-content"><a href="${shop.url}" target="_blank" class="info-link">公式サイト</a></div></div>` : '';
 
             // --- クーポンパーツ ---
             let couponHtml = '';
@@ -505,10 +513,9 @@
                 `;
             }
 
-            // ルート案内リンクの生成 (修正版)
+            // ルート案内リンクの生成
             let routeUrl = "";
             if (shop.lat && shop.lng) {
-                // Google Mapsの経路検索用公式URL
                 routeUrl = `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}`;
             }
 
@@ -518,6 +525,7 @@
                     <span class="card-cat">${shop.category}</span>
                     <h3>${shop.name}</h3>
                     <div style="margin-bottom:20px;">
+                        ${addressHtml}
                         ${telHtml}
                         ${hoursHtml}
                         ${urlHtml}
@@ -529,6 +537,7 @@
                             <i class="fa-solid fa-location-arrow"></i> ルート案内
                         </a>
                         ${shop.url ? `<a href="${shop.url}" target="_blank" class="btn-action btn-web"><i class="fa-solid fa-arrow-up-right-from-square"></i> WEB</a>` : ''}
+                        ${shop.sns ? `<a href="${shop.sns}" target="_blank" class="btn-action btn-sns"><i class="fa-brands fa-instagram"></i> SNS</a>` : ''}
                     </div>
                 </div>
             `;
@@ -559,12 +568,10 @@
         // --- その他の機能 ---
         function generateCategoryFilter(data) {
             const categories = [...new Set(data.map(item => item.category).filter(c => c))];
-            
-            // ★修正: 「その他」を配列の末尾（一番右）に移動
             const otherIndex = categories.indexOf("その他");
             if (otherIndex > -1) {
-                categories.splice(otherIndex, 1); // 一旦削除
-                categories.push("その他"); // 末尾に追加
+                categories.splice(otherIndex, 1); 
+                categories.push("その他"); 
             }
 
             const filterContainer = document.getElementById('category-filter');
@@ -646,23 +653,9 @@
         function useMockData() {
             const mock = [
                 { 
-                    id:1, name:"小倉城周辺カフェ", lat:33.8844, lng:130.8744, category:"飲食店", 
-                    description:"お城を見ながら一休み。", tel:"093-000-0000", hours:"10:00-18:00", url:"https://example.com", 
-                    image:"https://placehold.jp/300x200.png?text=Cafe", 
-                    coupon_imgs:"https://placehold.jp/200x100.png?text=10%OFF,https://placehold.jp/200x100.png?text=DrinkFree",
-                    coupon_urls:"https://example.com/coupon1, https://example.com/coupon2"
-                },
-                { 
-                    id:2, name:"門司港レトロ雑貨", lat:33.9446, lng:130.9616, category:"その他", 
-                    description:"レトロで可愛い雑貨。", tel:"093-111-1111", hours:"10:00-17:00", url:"", 
-                    image:"https://placehold.jp/300x200.png?text=Retro", coupon_imgs:"", coupon_urls:""
-                },
-                { 
-                    id:3, name:"スペースワールド駅前ジム", lat:33.8732, lng:130.8123, category:"健康・フィットネス", 
-                    description:"最新マシン完備。", tel:"093-222-2222", hours:"24時間", url:"", 
-                    image:"https://placehold.jp/300x200.png?text=Fitness", 
-                    coupon_imgs:"https://placehold.jp/200x100.png?text=TrialFree",
-                    coupon_urls:"https://example.com/fitness"
+                    id:1, name:"サンプル店", lat:33.8844, lng:130.8744, category:"サンプル", 
+                    description:"データ読み込みエラー", tel:"", hours:"", url:"", 
+                    image:"", coupon_imgs:"", coupon_urls:"" 
                 }
             ];
             initData(mock);
